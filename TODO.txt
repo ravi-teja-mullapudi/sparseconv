@@ -1,0 +1,11 @@
+Ravi:
+Implement basic convolution layer
+Implement sparse convolution layer
+Implement a problem instance generator
+Compute flops on machine
+
+Prashant:
+Convert sparse convolution layer into sparse matrix matrix multiply
+https://petewarden.com/2015/04/20/why-gemm-is-at-the-heart-of-deep-learning/
+http://www.netlib.org/blas/blast-forum/chapter3.pdf
+https://eigen.tuxfamily.org/dox/group__TutorialSparse.html
