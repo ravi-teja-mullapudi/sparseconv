@@ -109,21 +109,25 @@ int generate_random_tensor(float *T, unsigned int d1, unsigned int d2, unsigned 
     return 0;
 }
 
-int generate_sparsity_pattern(bool *T,  unsigned int d1, unsigned int d2, unsigned int d3,
-                              float sparsity) {
+unsigned int generate_sparsity_pattern(bool *T,  unsigned int d1, unsigned int d2, unsigned int d3,
+                                       float sparsity) {
 
     assert(sparsity >= 0 && sparsity <= 1);
     std::default_random_engine generator;
     std::bernoulli_distribution distribution(sparsity);
+    unsigned int nnz = 0;
     for (unsigned int i1 = 0; i1 < d1; i1++) {
         for (unsigned int i2 = 0; i2 < d2; i2++) {
             for (unsigned int i3 = 0; i3 < d3; i3++) {
                 unsigned int offset = I4(0, i1, i2, i3, 1, d1, d2, d3);
                 T[offset] =  distribution(generator);
+                if (T[offset]) {
+                    nnz++;
+                }
             }
         }
     }
-    return 0;
+    return nnz;
 }
 
 int main() {
@@ -146,19 +150,25 @@ int main() {
     generate_random_tensor(F_in, b, h + 2*p, w + 2*p, c_in);
     generate_random_tensor(W, c_out, c_in, f, f);
     generate_random_tensor(F_out, b, h_out, w_out, c_out);
-    generate_sparsity_pattern(M, b, h_out, w_out, 0.1);
+    unsigned int nnz = generate_sparsity_pattern(M, b, h_out, w_out, 0.1);
 
     float time_dense = benchmark(5, 1, [&]() {
         conv_naive(F_in, W, F_out, nullptr, b, h, w, c_in, c_out, f, s, p);
     });
 
-    std::cout << "Time Dense: " << 1000 * time_dense << "ms" << std::endl;
+    float gfops_dense = ((float)b * c_in * h_out * w_out * c_out * f * f)/(1e09);
+    float gflops_dense = (gfops_dense)/time_dense;
+    std::cout << "Dense Time : " << 1000 * time_dense << "ms " << std::endl;
+    std::cout << "GFLOPS : " << gflops_dense << std::endl;
 
     float time_sparse = benchmark(5, 1, [&]() {
         conv_naive(F_in, W, F_out, M, b, h, w, c_in, c_out, f, s, p);
     });
 
-    std::cout << "Time Sparse: " << 1000 * time_sparse << "ms" << std::endl;
+    float gfops_sparse = ((float)b * c_in * nnz * c_out * f * f)/(1e09);
+    float gflops_sparse = (gfops_sparse)/time_sparse;
+    std::cout << "Sparse Time: " << 1000 * time_sparse << "ms " << std::endl;
+    std::cout << "GFLOPS : " << gflops_sparse << std::endl;
 
     delete F_in;
     delete W;
