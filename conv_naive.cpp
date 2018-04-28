@@ -2,11 +2,27 @@
 #include <random>
 #include <cmath>
 #include <cassert>
+#include <chrono>
 
 inline bool is_nearly_equal(float x, float y)
 {
     const float epsilon = 1e-5;
     return std::abs(x - y) <= epsilon * std::abs(x);
+}
+
+template <typename F>
+double benchmark(int samples, int iterations, F op) {
+    double best = std::numeric_limits<double>::infinity();
+    for (int i = 0; i < samples; i++) {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        for (int j = 0; j < iterations; j++) {
+            op();
+        }
+        auto t2 = std::chrono::high_resolution_clock::now();
+        double dt = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1e6;
+        if (dt < best) best = dt;
+    }
+    return best / iterations;
 }
 
 // Indexing function into a 4-d tensor
@@ -40,6 +56,7 @@ int conv_naive(float *F_in, float *W, float *F_out, bool *M,
     unsigned int h_out = (h - f + 2*p)/s + 1;
     unsigned int w_out = (w - f + 2*p)/s + 1;
     for (unsigned int b_i = 0; b_i < b; b_i++) {
+#pragma omp parallel for
         for (unsigned int h_i = 0; h_i < h_out; h_i++) {
             for (unsigned int w_i = 0; w_i < w_out; w_i++) {
                 // Skip computation where the mask is zero
@@ -49,6 +66,7 @@ int conv_naive(float *F_in, float *W, float *F_out, bool *M,
                         continue;
                     }
                 }
+
                 for (unsigned int c_out_i = 0; c_out_i < c_out; c_out_i++) {
                     unsigned int out_offset = I4(b_i, h_i, w_i, c_out_i,
                                                  b, h_out, w_out, c_out);
@@ -111,7 +129,7 @@ int generate_sparsity_pattern(bool *T,  unsigned int d1, unsigned int d2, unsign
 int main() {
     unsigned int f = 3;
     unsigned int c_in = 16;
-    unsigned int c_out = 16;
+    unsigned int c_out = 64;
     unsigned int h = 256;
     unsigned int w = 256;
     unsigned int p = 1;
@@ -130,8 +148,17 @@ int main() {
     generate_random_tensor(F_out, b, h_out, w_out, c_out);
     generate_sparsity_pattern(M, b, h_out, w_out, 0.1);
 
-    conv_naive(F_in, W, F_out, nullptr, b, h, w, c_in, c_out, f, s, p);
-    //conv_naive(F_in, W, F_out, M, b, h, w, c_in, c_out, f, s, p);
+    float time_dense = benchmark(5, 1, [&]() {
+        conv_naive(F_in, W, F_out, nullptr, b, h, w, c_in, c_out, f, s, p);
+    });
+
+    std::cout << "Time Dense: " << 1000 * time_dense << "ms" << std::endl;
+
+    float time_sparse = benchmark(5, 1, [&]() {
+        conv_naive(F_in, W, F_out, M, b, h, w, c_in, c_out, f, s, p);
+    });
+
+    std::cout << "Time Sparse: " << 1000 * time_sparse << "ms" << std::endl;
 
     delete F_in;
     delete W;
