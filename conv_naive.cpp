@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cassert>
 #include <chrono>
+#include <stdlib.h>
 
 inline bool is_nearly_equal(float x, float y)
 {
@@ -67,6 +68,8 @@ int conv_naive(float *F_in, float *W, float *F_out, bool *M,
                     }
                 }
 
+//#pragma vector aligned
+#pragma omp simd
                 for (unsigned int c_out_i = 0; c_out_i < c_out; c_out_i++) {
                     unsigned int out_offset = I4(b_i, h_i, w_i, c_out_i,
                                                  b, h_out, w_out, c_out);
@@ -82,6 +85,65 @@ int conv_naive(float *F_in, float *W, float *F_out, bool *M,
                                                            c_out, c_in, f, f);
                                 //assert(w_offset >= 0 && w_offset < (c_out * c_in * f * f));
                                 F_out[out_offset] += W[w_offset] * F_in[in_offset];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+int conv_tiled_spatial(float *F_in, float *W, float *F_out, bool *M,
+                       unsigned int b, unsigned int h, unsigned int w,
+                       unsigned int c_in, unsigned int c_out,
+                       unsigned int f, unsigned int s, unsigned int p,
+                       unsigned int tile_size) {
+
+    unsigned int h_out = (h - f + 2*p)/s + 1;
+    unsigned int w_out = (w - f + 2*p)/s + 1;
+
+    unsigned int h_tiles = h_out/tile_size + (h_out%tile_size != 0);
+    unsigned int w_tiles = w_out/tile_size + (w_out%tile_size != 0);
+
+    for (unsigned int b_i = 0; b_i < b; b_i++) {
+#pragma omp parallel for collapse(2)
+        for (unsigned int h_t = 0; h_t < h_tiles; h_t++) {
+            for (unsigned int w_t = 0; w_t < w_tiles; w_t++) {
+                unsigned int h_start = h_t * tile_size;
+                unsigned int h_end = std::min((h_t + 1)*tile_size, h_out);
+                unsigned int w_start = w_t * tile_size;
+                unsigned int w_end = std::min((w_t + 1)*tile_size, w_out);
+                for (unsigned int h_i = h_start; h_i < h_end; h_i++) {
+                    for (unsigned int w_i = w_start; w_i < w_end; w_i++) {
+                        // Skip computation where the mask is zero
+                        if (M != nullptr) {
+                            unsigned int M_offset = I4(0, b_i, h_i, w_i, 1, b, h_out, w_out);
+                            if (!M[M_offset]) {
+                                continue;
+                            }
+                        }
+
+//#pragma vector aligned
+#pragma omp simd
+                        for (unsigned int c_out_i = 0; c_out_i < c_out; c_out_i++) {
+                            unsigned int out_offset = I4(b_i, h_i, w_i, c_out_i,
+                                    b, h_out, w_out, c_out);
+                            //assert(out_offset >= 0 && out_offset < (b * h_out * w_out * c_out));
+                            F_out[out_offset] = 0.0f;
+                            for (unsigned int c_in_i = 0; c_in_i < c_in; c_in_i++) {
+                                unsigned int in_offset = I4(b_i, s*h_i + p, s*w_i + p, c_in_i,
+                                        b, h, w, c_in);
+                                //assert(in_offset >= 0 && in_offset < (b * h * w * c_in));
+                                for (unsigned int f_h = 0; f_h < f; f_h++) {
+                                    for (unsigned int f_w = 0; f_w < f; f_w++) {
+                                        unsigned int w_offset = I4(c_out_i, c_in_i, f_h, f_w,
+                                                c_out, c_in, f, f);
+                                        //assert(w_offset >= 0 && w_offset < (c_out * c_in * f * f));
+                                        F_out[out_offset] += W[w_offset] * F_in[in_offset];
+                                    }
+                                }
                             }
                         }
                     }
@@ -142,10 +204,10 @@ int main() {
     unsigned int h_out = ((h - f + 2*p)/s + 1);
     unsigned int w_out = ((w - f + 2*p)/s + 1);
 
-    float *F_in = new float[b * (h + 2*p) * (w + 2*p) * c_in];
-    float *W = new float[c_out * c_in * f * f];
-    float *F_out = new float[b * h_out * w_out * c_out];
-    bool *M = new bool[b * h_out * w_out];
+    float *F_in = (float*) aligned_alloc(64, sizeof(float) * b * (h + 2*p) * (w + 2*p) * c_in);
+    float *W = (float*) aligned_alloc(64, sizeof(float) * c_out * c_in * f * f);
+    float *F_out = (float*) aligned_alloc(64, sizeof(float) * b * h_out * w_out * c_out);
+    bool *M = (bool*) aligned_alloc(64, sizeof(bool) *b * h_out * w_out);
 
     generate_random_tensor(F_in, b, h + 2*p, w + 2*p, c_in);
     generate_random_tensor(W, c_out, c_in, f, f);
@@ -161,6 +223,15 @@ int main() {
     std::cout << "Dense Time : " << 1000 * time_dense << "ms " << std::endl;
     std::cout << "GFLOPS : " << gflops_dense << std::endl;
 
+    unsigned int tile_size = 8;
+    float time_tiled_spatial = benchmark(5, 1, [&]() {
+        conv_tiled_spatial(F_in, W, F_out, nullptr, b, h, w, c_in, c_out, f, s, p, tile_size);
+    });
+
+    float gflops_tiled_spatial = (gfops_dense)/time_tiled_spatial;
+    std::cout << "Dense Time : " << 1000 * time_tiled_spatial << "ms " << std::endl;
+    std::cout << "GFLOPS : " << gflops_tiled_spatial << std::endl;
+
     float time_sparse = benchmark(5, 1, [&]() {
         conv_naive(F_in, W, F_out, M, b, h, w, c_in, c_out, f, s, p);
     });
@@ -170,10 +241,10 @@ int main() {
     std::cout << "Sparse Time: " << 1000 * time_sparse << "ms " << std::endl;
     std::cout << "GFLOPS : " << gflops_sparse << std::endl;
 
-    delete F_in;
-    delete W;
-    delete F_out;
-    delete M;
+    free(F_in);
+    free(W);
+    free(F_out);
+    free(M);
 
     return 0;
 }
