@@ -49,6 +49,7 @@ inline unsigned int I4(unsigned int i1, unsigned int i2, unsigned int i3, unsign
 // F_out is a tensor of dimension b x ((h - f + 2p)/s + 1) x ((w - f + 2p)/s + 1) x c_out
 // W is a tensor of dimension c_out x c_in x f x f
 // M is a tensor of dimension b x ((h - f + 2p)/s + 1) x ((w - f + 2p)/s + 1)
+
 int conv_naive(float *F_in, float *W, float *F_out, bool *M,
                unsigned int b, unsigned int h, unsigned int w,
                unsigned int c_in, unsigned int c_out,
@@ -76,11 +77,11 @@ int conv_naive(float *F_in, float *W, float *F_out, bool *M,
                     //assert(out_offset >= 0 && out_offset < (b * h_out * w_out * c_out));
                     F_out[out_offset] = 0.0f;
                     for (unsigned int c_in_i = 0; c_in_i < c_in; c_in_i++) {
-                        unsigned int in_offset = I4(b_i, s*h_i + p, s*w_i + p, c_in_i,
-                                                    b, h, w, c_in);
-                        //assert(in_offset >= 0 && in_offset < (b * h * w * c_in));
                         for (unsigned int f_h = 0; f_h < f; f_h++) {
                             for (unsigned int f_w = 0; f_w < f; f_w++) {
+                                unsigned int in_offset = I4(b_i, s*h_i + f_h, s*w_i + f_w, c_in_i,
+                                                            b, h, w, c_in);
+                                //assert(in_offset >= 0 && in_offset < (b * (h+2*p) * (w+2*p) * c_in));
                                 unsigned int w_offset = I4(c_out_i, c_in_i, f_h, f_w,
                                                            c_out, c_in, f, f);
                                 //assert(w_offset >= 0 && w_offset < (c_out * c_in * f * f));
@@ -95,11 +96,56 @@ int conv_naive(float *F_in, float *W, float *F_out, bool *M,
     return 0;
 }
 
-int conv_tiled_spatial(float *F_in, float *W, float *F_out, bool *M,
-                       unsigned int b, unsigned int h, unsigned int w,
-                       unsigned int c_in, unsigned int c_out,
-                       unsigned int f, unsigned int s, unsigned int p,
-                       unsigned int tile_size) {
+template<unsigned int b, unsigned int h, unsigned int w,
+         unsigned int c_in, unsigned int c_out, unsigned int f,
+         unsigned int s, unsigned int p>
+int conv_naive_tmpl(float *F_in, float *W, float *F_out, bool *M) {
+
+    unsigned int h_out = (h - f + 2*p)/s + 1;
+    unsigned int w_out = (w - f + 2*p)/s + 1;
+    for (unsigned int b_i = 0; b_i < b; b_i++) {
+#pragma omp parallel for
+        for (unsigned int h_i = 0; h_i < h_out; h_i++) {
+            for (unsigned int w_i = 0; w_i < w_out; w_i++) {
+                // Skip computation where the mask is zero
+                if (M != nullptr) {
+                    unsigned int M_offset = I4(0, b_i, h_i, w_i, 1, b, h_out, w_out);
+                    if (!M[M_offset]) {
+                        continue;
+                    }
+                }
+
+#pragma vector aligned
+#pragma omp simd
+                for (unsigned int c_out_i = 0; c_out_i < c_out; c_out_i++) {
+                    unsigned int out_offset = I4(b_i, h_i, w_i, c_out_i,
+                                                 b, h_out, w_out, c_out);
+                    //assert(out_offset >= 0 && out_offset < (b * h_out * w_out * c_out));
+                    F_out[out_offset] = 0.0f;
+                    for (unsigned int c_in_i = 0; c_in_i < c_in; c_in_i++) {
+                        for (unsigned int f_h = 0; f_h < f; f_h++) {
+                            for (unsigned int f_w = 0; f_w < f; f_w++) {
+                                unsigned int in_offset = I4(b_i, s*h_i + f_h, s*w_i + f_w, c_in_i,
+                                                            b, h, w, c_in);
+                                //assert(in_offset >= 0 && in_offset < (b * (h+2*p) * (w+2*p) * c_in));
+                                unsigned int w_offset = I4(c_out_i, c_in_i, f_h, f_w,
+                                                           c_out, c_in, f, f);
+                                //assert(w_offset >= 0 && w_offset < (c_out * c_in * f * f));
+                                F_out[out_offset] += W[w_offset] * F_in[in_offset];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+template<unsigned int b, unsigned int h, unsigned int w,
+         unsigned int c_in, unsigned int c_out, unsigned int f,
+         unsigned int s, unsigned int p, unsigned int tile_size>
+int conv_tiled_spatial(float *F_in, float *W, float *F_out, bool *M) {
 
     unsigned int h_out = (h - f + 2*p)/s + 1;
     unsigned int w_out = (w - f + 2*p)/s + 1;
@@ -125,7 +171,7 @@ int conv_tiled_spatial(float *F_in, float *W, float *F_out, bool *M,
                             }
                         }
 
-//#pragma vector aligned
+#pragma vector aligned
 #pragma omp simd
                         for (unsigned int c_out_i = 0; c_out_i < c_out; c_out_i++) {
                             unsigned int out_offset = I4(b_i, h_i, w_i, c_out_i,
@@ -133,15 +179,78 @@ int conv_tiled_spatial(float *F_in, float *W, float *F_out, bool *M,
                             //assert(out_offset >= 0 && out_offset < (b * h_out * w_out * c_out));
                             F_out[out_offset] = 0.0f;
                             for (unsigned int c_in_i = 0; c_in_i < c_in; c_in_i++) {
-                                unsigned int in_offset = I4(b_i, s*h_i + p, s*w_i + p, c_in_i,
-                                        b, h, w, c_in);
-                                //assert(in_offset >= 0 && in_offset < (b * h * w * c_in));
                                 for (unsigned int f_h = 0; f_h < f; f_h++) {
                                     for (unsigned int f_w = 0; f_w < f; f_w++) {
+                                        unsigned int in_offset = I4(b_i, s*h_i + f_h, s*w_i + f_w, c_in_i,
+                                                                    b, h, w, c_in);
+                                        //assert(in_offset >= 0 && in_offset < (b * (h+2*p) * (w+2*p) * c_in));
                                         unsigned int w_offset = I4(c_out_i, c_in_i, f_h, f_w,
-                                                c_out, c_in, f, f);
+                                                                   c_out, c_in, f, f);
                                         //assert(w_offset >= 0 && w_offset < (c_out * c_in * f * f));
                                         F_out[out_offset] += W[w_offset] * F_in[in_offset];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+template<unsigned int b, unsigned int h, unsigned int w,
+         unsigned int c_in, unsigned int c_out, unsigned int f,
+         unsigned int s, unsigned int p, unsigned int t1, unsigned int t2>
+int conv_tiled_3d(float *F_in, float *W, float *F_out, bool *M) {
+
+    unsigned int h_out = (h - f + 2*p)/s + 1;
+    unsigned int w_out = (w - f + 2*p)/s + 1;
+
+    unsigned int h_tiles = h_out/t1 + (h_out%t1 != 0);
+    unsigned int w_tiles = w_out/t1 + (w_out%t1 != 0);
+    unsigned int c_tiles = c_out/t2 + (c_out%t2 != 0);
+
+    for (unsigned int b_i = 0; b_i < b; b_i++) {
+#pragma omp parallel for collapse(2)
+        for (unsigned int h_t = 0; h_t < h_tiles; h_t++) {
+            for (unsigned int w_t = 0; w_t < w_tiles; w_t++) {
+                for (unsigned int c_t = 0; c_t < c_tiles; c_t++) {
+                    unsigned int c_start = c_t * t2;
+                    unsigned int c_end = std::min((c_t + 1)*t2, c_out);
+                    unsigned int h_start = h_t * t1;
+                    unsigned int h_end = std::min((h_t + 1)*t1, h_out);
+                    unsigned int w_start = w_t * t1;
+                    unsigned int w_end = std::min((w_t + 1)*t1, w_out);
+                    for (unsigned int h_i = h_start; h_i < h_end; h_i++) {
+                        for (unsigned int w_i = w_start; w_i < w_end; w_i++) {
+                            // Skip computation where the mask is zero
+                            if (M != nullptr) {
+                                unsigned int M_offset = I4(0, b_i, h_i, w_i, 1, b, h_out, w_out);
+                                if (!M[M_offset]) {
+                                    continue;
+                                }
+                            }
+
+#pragma vector aligned
+#pragma omp simd
+                            for (unsigned int c_out_i = c_start; c_out_i < c_end; c_out_i++) {
+                                unsigned int out_offset = I4(b_i, h_i, w_i, c_out_i,
+                                                             b, h_out, w_out, c_out);
+                                //assert(out_offset >= 0 && out_offset < (b * h_out * w_out * c_out));
+                                F_out[out_offset] = 0.0f;
+                                for (unsigned int c_in_i = 0; c_in_i < c_in; c_in_i++) {
+                                    for (unsigned int f_h = 0; f_h < f; f_h++) {
+                                        for (unsigned int f_w = 0; f_w < f; f_w++) {
+                                            unsigned int in_offset = I4(b_i, s*h_i + f_h, s*w_i + f_w, c_in_i,
+                                                                        b, h, w, c_in);
+                                            //assert(in_offset >= 0 && in_offset < (b * (h+2*p) * (w+2*p) * c_in));
+                                            unsigned int w_offset = I4(c_out_i, c_in_i, f_h, f_w,
+                                                                       c_out, c_in, f, f);
+                                            //assert(w_offset >= 0 && w_offset < (c_out * c_in * f * f));
+                                            F_out[out_offset] += W[w_offset] * F_in[in_offset];
+                                        }
                                     }
                                 }
                             }
@@ -193,14 +302,14 @@ unsigned int generate_sparsity_pattern(bool *T,  unsigned int d1, unsigned int d
 }
 
 int main() {
-    unsigned int f = 3;
-    unsigned int c_in = 16;
-    unsigned int c_out = 64;
-    unsigned int h = 256;
-    unsigned int w = 256;
-    unsigned int p = 1;
-    unsigned int b = 1;
-    unsigned int s = 1;
+    const unsigned int f = 3;
+    const unsigned int c_in = 16;
+    const unsigned int c_out = 64;
+    const unsigned int h = 256;
+    const unsigned int w = 256;
+    const unsigned int p = 1;
+    const unsigned int b = 1;
+    const unsigned int s = 1;
     unsigned int h_out = ((h - f + 2*p)/s + 1);
     unsigned int w_out = ((w - f + 2*p)/s + 1);
 
@@ -212,7 +321,7 @@ int main() {
     generate_random_tensor(F_in, b, h + 2*p, w + 2*p, c_in);
     generate_random_tensor(W, c_out, c_in, f, f);
     generate_random_tensor(F_out, b, h_out, w_out, c_out);
-    unsigned int nnz = generate_sparsity_pattern(M, b, h_out, w_out, 0.1);
+    unsigned int nnz = generate_sparsity_pattern(M, b, h_out, w_out, 0.3);
 
     float time_dense = benchmark(5, 1, [&]() {
         conv_naive(F_in, W, F_out, nullptr, b, h, w, c_in, c_out, f, s, p);
@@ -223,14 +332,32 @@ int main() {
     std::cout << "Dense Time : " << 1000 * time_dense << "ms " << std::endl;
     std::cout << "GFLOPS : " << gflops_dense << std::endl;
 
-    unsigned int tile_size = 8;
+    float time_dense_tmpl = benchmark(5, 1, [&]() {
+        conv_naive_tmpl<b, h, w, c_in, c_out, f, s, p>(F_in, W, F_out, nullptr);
+    });
+
+    float gflops_dense_tmpl = (gfops_dense)/time_dense_tmpl;
+    std::cout << "Dense Template Time : " << 1000 * time_dense_tmpl << "ms " << std::endl;
+    std::cout << "GFLOPS : " << gflops_dense_tmpl << std::endl;
+
+    const unsigned int tile_size = 16;
     float time_tiled_spatial = benchmark(5, 1, [&]() {
-        conv_tiled_spatial(F_in, W, F_out, nullptr, b, h, w, c_in, c_out, f, s, p, tile_size);
+        conv_tiled_spatial<b, h, w, c_in, c_out, f, s, p, tile_size>(F_in, W, F_out, nullptr);
     });
 
     float gflops_tiled_spatial = (gfops_dense)/time_tiled_spatial;
-    std::cout << "Dense Time : " << 1000 * time_tiled_spatial << "ms " << std::endl;
+    std::cout << "Dense Spatial Tile Time : " << 1000 * time_tiled_spatial << "ms " << std::endl;
     std::cout << "GFLOPS : " << gflops_tiled_spatial << std::endl;
+
+    const unsigned int t1 = 16;
+    const unsigned int t2 = 32;
+    float time_tiled_3d = benchmark(5, 1, [&]() {
+        conv_tiled_3d<b, h, w, c_in, c_out, f, s, p, t1, t2>(F_in, W, F_out, nullptr);
+    });
+
+    float gflops_tiled_3d = (gfops_dense)/time_tiled_3d;
+    std::cout << "Dense 3D Tile Time : " << 1000 * time_tiled_3d << "ms " << std::endl;
+    std::cout << "GFLOPS : " << gflops_tiled_3d << std::endl;
 
     float time_sparse = benchmark(5, 1, [&]() {
         conv_naive(F_in, W, F_out, M, b, h, w, c_in, c_out, f, s, p);
