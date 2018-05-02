@@ -5,6 +5,7 @@ Implement a problem instance generator
 Compute flops on machine
 
 Prashant:
+Use Winograd FALCON
 Convert sparse convolution layer into sparse matrix matrix multiply
 https://petewarden.com/2015/04/20/why-gemm-is-at-the-heart-of-deep-learning/
 http://www.netlib.org/blas/blast-forum/chapter3.pdf

@@ -5,6 +5,12 @@
 #include <chrono>
 #include <stdlib.h>
 
+extern "C" {
+#define restrict __restrict__
+#include "third_party/FALCON/include/falcon.h"
+#undef restrict
+}
+
 inline bool is_nearly_equal(float x, float y)
 {
     const float epsilon = 1e-5;
@@ -272,6 +278,46 @@ int conv_tiled_3d(float *F_in, float *W, float *F_out, bool *M) {
     return 0;
 }
 
+// Convolution layer parameters
+// b -- batch size
+// h -- height input
+// w -- width input
+// c_in -- input channels
+// c_out -- output channels
+// f -- filter size
+// s -- stride
+// p -- padding
+//
+// For more information http://cs231n.github.io/convolutional-networks/
+// A guide to convolution arithmetic for deep learning https://arxiv.org/pdf/1603.07285.pdf
+
+// F_in is a tensor of dimension b x (h+2p) x (w+2p) x c_in
+// F_out is a tensor of dimension b x ((h - f + 2p)/s + 1) x ((w - f + 2p)/s + 1) x c_out
+// W is a tensor of dimension c_out x f x f x c_in
+// M is a tensor of dimension b x ((h - f + 2p)/s + 1) x ((w - f + 2p)/s + 1)
+
+int conv_winograd(float *F_in, float *W, float *F_out, bool *M,
+                  unsigned int b, unsigned int h, unsigned int w,
+                  unsigned int c_in, unsigned int c_out,
+                  unsigned int f, unsigned int s, unsigned int p) {
+    assert(h == w);
+
+    falcon_init_lib();
+
+    unsigned int MM = 1;
+    float *image = F_in;
+    unsigned int irows = h;
+    unsigned int C = c_in;
+    float *filter = W;
+    unsigned int K = c_out; 
+    unsigned int batch = b; 
+    float *out = F_out; 
+
+    fal_conv(MM,image,irows,C,filter,K,batch,out);
+
+    falcon_free_lib();
+}
+
 // Randomly initialize a 4d-tensor
 int generate_random_tensor(float *T, unsigned int d1, unsigned int d2, unsigned int d3, unsigned int d4) {
     std::default_random_engine generator;
@@ -377,6 +423,13 @@ int main() {
     float gflops_sparse = (gfops_sparse)/time_sparse;
     std::cout << "Sparse Time: " << 1000 * time_sparse << "ms " << std::endl;
     std::cout << "GFLOPS : " << gflops_sparse << std::endl;
+
+    float time_winograd = benchmark(5, 1, [&]() {
+        conv_winograd(F_in, W, F_out, M, b, h, w, c_in, c_out, f, s, p);
+    });
+    float gflops_winograd = (gfops_dense)/time_winograd;
+    std::cout << "Winograd Time: " << 1000 * time_winograd << "ms " << std::endl;
+    std::cout << "GFLOPS : " << gflops_winograd << std::endl;
 
     free(F_in);
     free(W);
