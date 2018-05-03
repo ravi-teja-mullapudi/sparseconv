@@ -12,6 +12,9 @@ extern "C" {
 #undef restrict
 }
 
+#define SF 2
+#define SCALE(x) ((x)*SF)
+
 inline bool is_nearly_equal(float x, float y)
 {
     const float epsilon = 1e-5;
@@ -461,19 +464,19 @@ int main(int argc, char *argv[]) {
         for (unsigned int s = 0; s < 4; s++) {
             float sparsity = sparsity_array[s];
             std::cout << "----------------------- Sparsity - " << sparsity << " -----------------------" << std::endl;
-            do_one_layer<  3,  64, 226, 226>(1, sparsity);
-            do_one_layer< 64,  64, 226, 226>(2, sparsity);
-            do_one_layer< 64, 128, 114, 114>(3, sparsity);
-            do_one_layer<128, 128, 114, 114>(4, sparsity);
-            do_one_layer<128, 256,  58,  58>(5, sparsity);
-            do_one_layer<256, 256,  58,  58>(6, sparsity);
-            do_one_layer<256, 256,  58,  58>(7, sparsity);
-            do_one_layer<256, 512,  30,  30>(8, sparsity);
-            do_one_layer<512, 512,  30,  30>(9, sparsity);
-            do_one_layer<512, 512,  30,  30>(10, sparsity);
-            do_one_layer<512, 512,  16,  16>(11, sparsity);
-            do_one_layer<512, 512,  16,  16>(12, sparsity);
-            do_one_layer<512, 512,  16,  16>(13, sparsity);
+            do_one_layer<  3,  64, SCALE(226), SCALE(226)>(1, sparsity);
+            do_one_layer< 64,  64, SCALE(226), SCALE(226)>(2, sparsity);
+            do_one_layer< 64, 128, SCALE(114), SCALE(114)>(3, sparsity);
+            do_one_layer<128, 128, SCALE(114), SCALE(114)>(4, sparsity);
+            do_one_layer<128, 256,  SCALE(58),  SCALE(58)>(5, sparsity);
+            do_one_layer<256, 256,  SCALE(58),  SCALE(58)>(6, sparsity);
+            do_one_layer<256, 256,  SCALE(58),  SCALE(58)>(7, sparsity);
+            do_one_layer<256, 512,  SCALE(30),  SCALE(30)>(8, sparsity);
+            do_one_layer<512, 512,  SCALE(30),  SCALE(30)>(9, sparsity);
+            do_one_layer<512, 512,  SCALE(30),  SCALE(30)>(10, sparsity);
+            do_one_layer<512, 512,  SCALE(16),  SCALE(16)>(11, sparsity);
+            do_one_layer<512, 512,  SCALE(16),  SCALE(16)>(12, sparsity);
+            do_one_layer<512, 512,  SCALE(16),  SCALE(16)>(13, sparsity);
         }
     } else {
         float sparsity = 0.1;
@@ -481,19 +484,19 @@ int main(int argc, char *argv[]) {
 	    unsigned int num_threads = threads[t];
             std::cout << "----------------------- Threads - " << num_threads << " -----------------------" << std::endl;
 	    omp_set_num_threads(num_threads);
-            do_one_layer<  3,  64, 226, 226>(1, sparsity);
-            do_one_layer< 64,  64, 226, 226>(2, sparsity);
-            do_one_layer< 64, 128, 114, 114>(3, sparsity);
-            do_one_layer<128, 128, 114, 114>(4, sparsity);
-            do_one_layer<128, 256,  58,  58>(5, sparsity);
-            do_one_layer<256, 256,  58,  58>(6, sparsity);
-            do_one_layer<256, 256,  58,  58>(7, sparsity);
-            do_one_layer<256, 512,  30,  30>(8, sparsity);
-            do_one_layer<512, 512,  30,  30>(9, sparsity);
-            do_one_layer<512, 512,  30,  30>(10, sparsity);
-            do_one_layer<512, 512,  16,  16>(11, sparsity);
-            do_one_layer<512, 512,  16,  16>(12, sparsity);
-            do_one_layer<512, 512,  16,  16>(13, sparsity);
+            do_one_layer<  3,  64, SCALE(226), SCALE(226)>(1, sparsity);
+            do_one_layer< 64,  64, SCALE(226), SCALE(226)>(2, sparsity);
+            do_one_layer< 64, 128, SCALE(114), SCALE(114)>(3, sparsity);
+            do_one_layer<128, 128, SCALE(114), SCALE(114)>(4, sparsity);
+            do_one_layer<128, 256,  SCALE(58),  SCALE(58)>(5, sparsity);
+            do_one_layer<256, 256,  SCALE(58),  SCALE(58)>(6, sparsity);
+            do_one_layer<256, 256,  SCALE(58),  SCALE(58)>(7, sparsity);
+            do_one_layer<256, 512,  SCALE(30),  SCALE(30)>(8, sparsity);
+            do_one_layer<512, 512,  SCALE(30),  SCALE(30)>(9, sparsity);
+            do_one_layer<512, 512,  SCALE(30),  SCALE(30)>(10, sparsity);
+            do_one_layer<512, 512,  SCALE(16),  SCALE(16)>(11, sparsity);
+            do_one_layer<512, 512,  SCALE(16),  SCALE(16)>(12, sparsity);
+            do_one_layer<512, 512,  SCALE(16),  SCALE(16)>(13, sparsity);
 	}
     }
 
