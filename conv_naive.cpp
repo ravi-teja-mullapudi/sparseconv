@@ -56,11 +56,10 @@ inline unsigned int I4(unsigned int i1, unsigned int i2, unsigned int i3, unsign
 // W is a tensor of dimension c_out x f x f x c_in
 // M is a tensor of dimension b x ((h - f + 2p)/s + 1) x ((w - f + 2p)/s + 1)
 
-int conv_naive(float *F_in, float *W, float *F_out, bool *M,
-               unsigned int b, unsigned int h, unsigned int w,
-               unsigned int c_in, unsigned int c_out,
-               unsigned int f, unsigned int s, unsigned int p) {
-
+template<unsigned int b, unsigned int h, unsigned int w,
+         unsigned int c_in, unsigned int c_out, unsigned int f,
+         unsigned int s, unsigned int p>
+int conv_naive(float *F_in, float *W, float *F_out, bool *M) {
     unsigned int h_out = (h - f + 2*p)/s + 1;
     unsigned int w_out = (w - f + 2*p)/s + 1;
     for (unsigned int b_i = 0; b_i < b; b_i++) {
@@ -380,7 +379,7 @@ int main() {
     unsigned int nnz = generate_sparsity_pattern(M, b, h_out, w_out, 0.1);
 
     float time_dense = benchmark(5, 1, [&]() {
-        conv_naive(F_in, W, F_out, nullptr, b, h, w, c_in, c_out, f, s, p);
+        conv_naive<b, h, w, c_in, c_out, f, s, p>(F_in, W, F_out, nullptr);
     });
 
     float gfops_dense = ((float)b * c_in * h_out * w_out * c_out * f * f)/(1e09);
