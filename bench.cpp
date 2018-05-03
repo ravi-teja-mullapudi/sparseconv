@@ -4,6 +4,7 @@
 #include <cassert>
 #include <chrono>
 #include <stdlib.h>
+#include <omp.h>
 
 extern "C" {
 #define restrict __restrict__
@@ -444,7 +445,8 @@ void do_one_layer(unsigned int layer, float sparsity) {
 
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+    const unsigned int threads[6] = {1, 2, 4, 8, 16, 32};
     const float sparsity_array[4] = {0.05, 0.1, 0.25, 0.5};
     const unsigned int hw_array[13] =   {226, 226, 114, 114,  58,  58,  58,  30,  30,  30,  16,  16,  16};
     const unsigned int cin_array[13] =  {3,    64,  64, 128, 128, 256, 256, 256, 512, 512, 512, 512, 512};
@@ -453,22 +455,46 @@ int main() {
 
     falcon_init_lib();
 
-    for (unsigned int s = 0; s < 4; s++) {
-        float sparsity = sparsity_array[s];
-	std::cout << "----------------------- Sparsity - " << sparsity << " -----------------------" << std::endl;
-        do_one_layer<  3,  64, 226, 226>(1, sparsity);
-        do_one_layer< 64,  64, 226, 226>(2, sparsity);
-        do_one_layer< 64, 128, 114, 114>(3, sparsity);
-        do_one_layer<128, 128, 114, 114>(4, sparsity);
-        do_one_layer<128, 256,  58,  58>(5, sparsity);
-        do_one_layer<256, 256,  58,  58>(6, sparsity);
-        do_one_layer<256, 256,  58,  58>(7, sparsity);
-        do_one_layer<256, 512,  30,  30>(8, sparsity);
-        do_one_layer<512, 512,  30,  30>(9, sparsity);
-        do_one_layer<512, 512,  30,  30>(10, sparsity);
-        do_one_layer<512, 512,  16,  16>(11, sparsity);
-        do_one_layer<512, 512,  16,  16>(12, sparsity);
-        do_one_layer<512, 512,  16,  16>(13, sparsity);
+    int bench = (argc > 1 ? atoi(argv[1]) : 0);
+
+    if (bench == 0) { 
+        for (unsigned int s = 0; s < 4; s++) {
+            float sparsity = sparsity_array[s];
+            std::cout << "----------------------- Sparsity - " << sparsity << " -----------------------" << std::endl;
+            do_one_layer<  3,  64, 226, 226>(1, sparsity);
+            do_one_layer< 64,  64, 226, 226>(2, sparsity);
+            do_one_layer< 64, 128, 114, 114>(3, sparsity);
+            do_one_layer<128, 128, 114, 114>(4, sparsity);
+            do_one_layer<128, 256,  58,  58>(5, sparsity);
+            do_one_layer<256, 256,  58,  58>(6, sparsity);
+            do_one_layer<256, 256,  58,  58>(7, sparsity);
+            do_one_layer<256, 512,  30,  30>(8, sparsity);
+            do_one_layer<512, 512,  30,  30>(9, sparsity);
+            do_one_layer<512, 512,  30,  30>(10, sparsity);
+            do_one_layer<512, 512,  16,  16>(11, sparsity);
+            do_one_layer<512, 512,  16,  16>(12, sparsity);
+            do_one_layer<512, 512,  16,  16>(13, sparsity);
+        }
+    } else {
+        float sparsity = 0.1;
+	for (unsigned int t = 0; t < 6; t++) {
+	    unsigned int num_threads = threads[t];
+            std::cout << "----------------------- Threads - " << num_threads << " -----------------------" << std::endl;
+	    omp_set_num_threads(num_threads);
+            do_one_layer<  3,  64, 226, 226>(1, sparsity);
+            do_one_layer< 64,  64, 226, 226>(2, sparsity);
+            do_one_layer< 64, 128, 114, 114>(3, sparsity);
+            do_one_layer<128, 128, 114, 114>(4, sparsity);
+            do_one_layer<128, 256,  58,  58>(5, sparsity);
+            do_one_layer<256, 256,  58,  58>(6, sparsity);
+            do_one_layer<256, 256,  58,  58>(7, sparsity);
+            do_one_layer<256, 512,  30,  30>(8, sparsity);
+            do_one_layer<512, 512,  30,  30>(9, sparsity);
+            do_one_layer<512, 512,  30,  30>(10, sparsity);
+            do_one_layer<512, 512,  16,  16>(11, sparsity);
+            do_one_layer<512, 512,  16,  16>(12, sparsity);
+            do_one_layer<512, 512,  16,  16>(13, sparsity);
+	}
     }
 
 #if 0
