@@ -252,11 +252,19 @@ for $b$ in [0, $B$]:
 We compare our sparse implementation to highly optimized indirect winograd
 implementation (FALCON) which utilizes highly optimized intel libraries and
 tensorflow (not compiled from source which could lead to better performance).
+We use convolutional layer configurations with large spatial resolution from 
+the VGG architecture~\cite{simonyan2014very}.
 
 \begin{figure}[t]
 	\centering
 	\includegraphics[width=\textwidth]{falcon_tf}
     \label{fig:falcon_tf}
+\end{figure}
+
+\begin{figure}[t]
+	\centering
+	\includegraphics[width=\textwidth]{scaling}
+    \label{fig:scaling}
 \end{figure}
 \label{sec:eval}
 
