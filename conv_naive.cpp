@@ -306,7 +306,8 @@ int conv_winograd(float *F_in, float *W, float *F_out, bool *M,
 
     unsigned int MM = 1;
     float *image = F_in;
-    unsigned int irows = h;
+    //unsigned int irows = h;
+    unsigned int irows = h+2*p;
     unsigned int C = c_in;
     float *filter = W;
     unsigned int K = c_out; 
