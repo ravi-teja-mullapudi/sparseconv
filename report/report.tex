@@ -32,7 +32,8 @@
     basicstyle=\footnotesize,
     escapeinside={\%*}{*)},
     tabsize=2,
-    language=python
+    language=python,
+    numbers=left
 }
 % CleverRef Setup
 \usepackage[capitalize,noabbrev]{cleveref}
@@ -170,24 +171,66 @@ Our assumption is that the sparse spatial locations to compute the convolution
 operation at is already determined. As we mentioned earlier this could be from
 pixel or feature level differences in a video stream or from sparse input
 signal. The locations are encoded by a mask $M$ which is a 3d tensor of shape $B
-\times (\ceil{(H - F_h + 2P)/S}) \times (\ceil{(W - F_w + 2P)/S})$,
-$M_{b,h,w} = 1$ indicates that convolution needs to be performed at the location
-$h, w$ on the $b^{th}$ input. 
+\times (\ceil{(H - F_h + 2P)/S}) \times (\ceil{(W - F_w + 2P)/S})$, $M_{b,h,w} =
+1$ indicates that convolution needs to be performed at the location $h, w$ on
+the $b^{th}$ input. Figure~\ref{fig:conv_algo} lists our parallel tiled
+implementation of direct sparse convolution. The implementation is geared
+towards a modern multi-core processor and convolution layers operate on inputs
+with large spatial extent (which is common in semantic
+segmentation~\cite{long2015fully} and object detection
+models~\cite{he2017mask}). 
 
+Our algorithm performs the operation in tiles which are done in parallel across
+multiple cores. We use OpenMP to parallelize the tiles across the cores. The
+tile sizes are chosen to ensure there is enough parallel work to keep the cores
+saturated as well as to avoid imbalance due to the sparsity i.e., some tiles may
+have more work than the others. Moreover, we use the OpenMP dynamic scheduler to
+distribute the work across the cores to ensure workload balance. Line 6 shows
+the parallel directive which performs all the iterations of loops on Lines 7-9
+in parallel. By constraining the tile sizes in the spatial as well as the filter
+output filter dimension the data locality is improved since there is data reuse
+when the working set fits in the CPU caches.  This is similar to the blocked
+matrix-multiply algorithm which improves data reuse.  Parallelizing across
+the batch dimension is straightforward and not the main focus. Additionally, in
+most inference settings there is a single input that needs to be processed fast
+and our evaluation will focus on the single input per batch ($B=1$) setting.
+
+Modern multi-core processors support parallelism at two levels one at the core
+level and the other at the level of functional units (ALUs) which perform basic
+operations like addition and multiplication. Typically there is support for
+executing a single instructions on multiple data items called SIMD/vector
+processing.  Current architectures have instructions which can perform either 8
+or 16 floating point operations at the same time. One of the key challenges of
+getting good performance on a modern processor is in effectively utilizing the
+vector processing. Utilizing the SIMD units either requires the programmer to
+explicitly use vector intrinsics or rely on compiler auto-vectorization. Our
+initial experiments and analysis with gcc compiler showed that vector units were
+not being utilized. OpenMP 4.0 added new directives which let the programmer
+guide the compiler in generating good vector code. However, the new OpenMP
+directives are only supported by the intel compiler which we use in our
+evaluation. Lines 15-16 instruct the compiler to map the iterations of the loop
+on line 17 in groups of vector width. Note the iterations of the loop on line 17
+can be done in parallel and this is difficult for a compiler to infer
+automatically.
+
+\begin{figure}
 \begin{lstlisting}[mathescape]
 $H_{out} = \ceil{(H - F_h + 2P)/S}$
 $W_{out} = \ceil{(W - F_w + 2P)/S}$
 $H_{tiles} = \ceil{H_{out}/T_h}$
 $W_{tiles} = \ceil{W_{out}/T_w}$
 $C_{tiles} = \ceil{C/T_c}$
+#pragma omp parallel for collapse(3) schedule(dynamic)
 for $b$ in [0, $B$]:
     for $h_t$ in [0, $H_{tiles}$]:
         for $w_t$ in [0, $W_{tiles}$]:
-            for $k_t$ in [0, $K_{tiles}$]:
+            for $c_t$ in [0, $C_{tiles}$]:
                 for $h$ in [$h_t$, $(h_t + 1) T_h$]:
                     for $w$ in [$w_t$, $(w_t + 1) T_w$]:
                         if $M[b, h, w]$ == 0:
                             continue
+                        #pragma vector aligned
+                        #pragma omp simd
                         for $c$ in [$c_t$, $(c_t + 1) T_c$]:
                             s = 0
                             for $k$ in [0, $K$]:
@@ -197,21 +240,24 @@ for $b$ in [0, $B$]:
                             $O[b, h, w, c]$ = s
 
 \end{lstlisting}
+    \caption{Tiled algorithm for sparse direct convolution.}
+    \label{fig:conv_algo}
+\end{figure}
 
 \textbf{Sparsity}
 
 \textbf{Data Layout and Alignment}
 
-\textbf{Multi-core parallelism}
-
-\textbf{Tiling}
-
-\textbf{SIMD parallelism}
-
 \section{Evaluation}
-\textbf{Tensorflow}
+We compare our sparse implementation to highly optimized indirect winograd
+implementation (FALCON) which utilizes highly optimized intel libraries and
+tensorflow (not compiled from source which could lead to better performance).
 
-\textbf{FALCON}
+\begin{figure}[t]
+	\centering
+	\includegraphics[width=\textwidth]{falcon_tf}
+    \label{fig:falcon_tf}
+\end{figure}
 \label{sec:eval}
 
 \section{Conclusions}
