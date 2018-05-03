@@ -417,7 +417,7 @@ int main() {
     std::cout << "GFLOPS : " << gflops_tiled_3d << std::endl;
 
     float time_sparse = benchmark(5, 1, [&]() {
-        conv_naive(F_in, W, F_out, M, b, h, w, c_in, c_out, f, s, p);
+        conv_naive<b, h, w, c_in, c_out, f, s, p>(F_in, W, F_out, M);
     });
 
     float gfops_sparse = ((float)b * c_in * nnz * c_out * f * f)/(1e09);
