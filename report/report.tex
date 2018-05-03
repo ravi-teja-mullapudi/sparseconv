@@ -26,7 +26,14 @@
 \usepackage{enumitem}
 \usepackage{url}
 \usepackage{amsmath}
+\usepackage{listings}
 
+\lstset{
+    basicstyle=\footnotesize,
+    escapeinside={\%*}{*)},
+    tabsize=2,
+    language=python
+}
 % CleverRef Setup
 \usepackage[capitalize,noabbrev]{cleveref}
 
@@ -57,7 +64,7 @@
 Performing inference on high-resolution video and image data using
 state-of-the-art deep vision models is computationally demanding.  At the
 heart of deep learning models for computer vision is the convolution
-operation which is a 3D filtering operation on high-dimensional features.
+operation which is a 3d filtering operation on high-dimensional features.
 Improving the performance of convolution layers continues to be a key aspect
 of enabling computer vision research. There have been several efforts to
 improve the efficiency by switching to different representation domain (FFT,
@@ -74,6 +81,7 @@ in a transformed domain.
 \end{abstract}
 
 \newcommand{\floor}[1]{\lfloor #1 \rfloor}
+\newcommand{\ceil}[1]{\lceil #1 \rceil}
 
 \section{Background and Related Work}
 \label{sec:bg-rw}
@@ -84,7 +92,8 @@ takes as input features $I$, the filter coefficients $F$, and produces the
 output features $O$.
 
 \begin{equation}
-O_{b, h, w, k} = \sum_{z=0}^{C}\sum_{x=0}^{F_h} \sum_{y=0}^{F_w} I_{b, S h+x, S w+x, z} * F_{k, z, x, y}
+O_{b, h, w, k} = \sum_{c=0}^{C}\sum_{y=0}^{F_h} \sum_{x=0}^{F_w} I_{b, S h+y, S
+    w+x, z} * F_{k, c, y, x}
 \label{eqn:conv}
 \end{equation}
 
@@ -92,16 +101,21 @@ The features and the filter coefficients are represented as 4d tensors of the
 following shapes:
 \begin{align*}
 & I:B \times H \times W \times C \\
-& O:B \times (\floor{(H - F_h + 2P)/S} + 1) \times (\floor{(W - F_w + 2P)/S} +
-    1) \times K \\
+& O:B \times (\ceil{(H - F_h + 2P)/S}) \times (\ceil{(W - F_w + 2P)/S}) \times K \\
 & F:C \times K \times F_h \times F_w
 \end{align*}
 $B$ is the size of the batch of input features. $H$ and $W$ are the spatial
 height and width of the input feature map. $S$ is the spatial stride at which
 the filtering is performed on the input (sampling rate). $P$ is the amount of
 padding added to the input to handle boundary conditions. $F_h$ and $F_w$ are
-the spatial height and width of the filters. $C$ and $K$ are the input and output
-feature dimensions respectively. 
+the spatial height and width of the filters. $C$ and $K$ are the input and
+output feature dimensions respectively. The operation can be parallelized across
+many dimensions and mapping the operation to modern hardware CPUs, GPUs, FPGAs
+and other accelerators has been a topic of extensive
+research~\cite{vasilache2014fast, lavin2016fast, liu2018efficient,
+jia2018optimizing, tsai2016performance, truong2016latte, chetlur2014cudnn, chen2017eyeriss}. The main
+challenge is efficient implementation is effectively utilizing the parallelism
+offered by the architecture and while maintaining data locality.
 
 \textbf{Spatial Sparsity} In settings where the input data is sparse or highly
 redundant (consecutive frames of video) the convolution operation can only
@@ -111,7 +125,8 @@ onboard cameras in an autonomous driving car moving. Despite being captured a
 low frame rate there is a significant region of the input that remains unchanged
 at the pixel level. Feature representations in deeper layers of a network are
 more robust to pixel-level changes and would exhibit even higher levels of
-sparsity~\cite{shelhamer2016clockwork}.
+sparsity~\cite{shelhamer2016clockwork}. Recent work~\cite{ren2018sbnet} has show
+the effectiveness of sparse block convolutions on sparse 3d LIDAR data.
 
 \begin{figure}[h]
 	\centering
@@ -133,8 +148,70 @@ sparsity~\cite{shelhamer2016clockwork}.
 \label{fig:frames}
 \end{figure}
 
+\textbf{Direct vs. Indirect Convolution} Early implementation of the convolution
+operation transformed the operation into a matrix multiply to leverage fast
+vendor optimized linear algebra libraries for the target machine architecture.
+Recent work~\cite{vasilache2014fast, lavin2016fast} has demonstrated that
+performing the convolution in the other domains (FFT or winograd) yields
+significant improvements in performance.  Indirect approaches involve
+transforming the input features and the weights into a different domain,
+followed by efficient operations in the transformed domain and an inverse
+transformation back into the spatial domain. State-of-the-art models use filters
+with small support ($3 \times 3$, $1 \times 1$), in this regime transformation
+to the winograd domain is more effective than the FFT domain. Domain
+transformation approaches do not work well with sparsity since spatial sparsity
+cannot be effectively exploited during the
+transformations~\cite{liu2018efficient}.  We demonstrate simple parallel and
+locality-aware direct convolution performs comparably with highly tuned winograd
+convolutions.
+
 \section{Sparse Direct Convolution}
+Our assumption is that the sparse spatial locations to compute the convolution
+operation at is already determined. As we mentioned earlier this could be from
+pixel or feature level differences in a video stream or from sparse input
+signal. The locations are encoded by a mask $M$ which is a 3d tensor of shape $B
+\times (\ceil{(H - F_h + 2P)/S}) \times (\ceil{(W - F_w + 2P)/S})$,
+$M_{b,h,w} = 1$ indicates that convolution needs to be performed at the location
+$h, w$ on the $b^{th}$ input. 
+
+\begin{lstlisting}[mathescape]
+$H_{out} = \ceil{(H - F_h + 2P)/S}$
+$W_{out} = \ceil{(W - F_w + 2P)/S}$
+$H_{tiles} = \ceil{H_{out}/T_h}$
+$W_{tiles} = \ceil{W_{out}/T_w}$
+$C_{tiles} = \ceil{C/T_c}$
+for $b$ in [0, $B$]:
+    for $h_t$ in [0, $H_{tiles}$]:
+        for $w_t$ in [0, $W_{tiles}$]:
+            for $k_t$ in [0, $K_{tiles}$]:
+                for $h$ in [$h_t$, $(h_t + 1) T_h$]:
+                    for $w$ in [$w_t$, $(w_t + 1) T_w$]:
+                        if $M[b, h, w]$ == 0:
+                            continue
+                        for $c$ in [$c_t$, $(c_t + 1) T_c$]:
+                            s = 0
+                            for $k$ in [0, $K$]:
+                                for $y$ in [0, $F_h$]:
+                                    for $x$ in [0, $F_w$]:
+                                        s += $W[k, y, x, c] \times I[b, Sh + y, Sw + x, k]$
+                            $O[b, h, w, c]$ = s
+
+\end{lstlisting}
+
+\textbf{Sparsity}
+
+\textbf{Data Layout and Alignment}
+
+\textbf{Multi-core parallelism}
+
+\textbf{Tiling}
+
+\textbf{SIMD parallelism}
+
 \section{Evaluation}
+\textbf{Tensorflow}
+
+\textbf{FALCON}
 \label{sec:eval}
 
 \section{Conclusions}
