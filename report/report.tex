@@ -27,6 +27,7 @@
 \usepackage{url}
 \usepackage{amsmath}
 \usepackage{listings}
+\usepackage{booktabs, multirow, array, tabularx}
 
 \lstset{
     basicstyle=\footnotesize,
@@ -250,10 +251,36 @@ for $b$ in [0, $B$]:
 
 \section{Evaluation}
 We compare our sparse implementation to highly optimized indirect winograd
-implementation (FALCON) which utilizes highly optimized intel libraries and
-tensorflow (not compiled from source which could lead to better performance).
-We use convolutional layer configurations with large spatial resolution from 
-the VGG architecture~\cite{simonyan2014very}.
+implementation (FALCON https://colfaxresearch.com/falcon-library/) which
+utilizes optimized intel libraries and tensorflow (not compiled from source
+which could lead to better performance) which is a high performance deep
+learning framework.  We use convolutional layer configurations with large
+spatial resolution from the VGG architecture~\cite{simonyan2014very}. The
+specific configurations of the convolution operations are listed in
+Table~\ref{tab:conv_config}. As we mention earlier we use the latest icc (Intel
+C Compiler) compiler for compiling both our implementation and the FALCON
+library. 
+
+\begin{table}[h]\centering
+\small
+\begin{tabularx}{0.75\textwidth}{Xcccccc}\toprule
+    Layer Name & $C$ & $K$ & $H$ & $W$ & $F_h$ & $F_w$\\ \midrule 
+    Conv 1\_1 & 64 & 3 & 226 & 266 & 3  & 3 \\
+    Conv 1\_1 (2x) & 64 & 3 & 452 & 452 & 3  & 3 \\
+    Conv 1\_2  & 64 & 64 & 226 & 226 & 3  & 3 \\
+    Conv 1\_2 (2x) & 64 & 64 & 452 & 452 & 3  & 3 \\
+    Conv 2\_1  & 128 & 64 & 114 & 114 & 3  & 3 \\
+    Conv 2\_1 (2x) & 128 & 64 & 228 & 228 & 3  & 3 \\
+    Conv 2\_2 (2x) & 256 & 128 & 228 & 228 & 3  & 3 \\
+    \bottomrule
+\end{tabularx}
+    \vspace{1em}
+    \caption{Configurations of convolution layers form VGG network that operate
+    on high-resolution feature maps. The 2x configurations are scaled up input
+    feature maps.}
+\label{tab:conv_config}
+\end{table}
+
 
 \begin{figure}[t]
 	\centering
