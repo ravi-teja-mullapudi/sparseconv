@@ -254,6 +254,7 @@ vector loads are from a contiguous memory locations. The memory allocation for
 all the tensors are also aligned to 64 bytes for effective SIMD code generation.
 
 \section{Evaluation}
+\label{sec:eval}
 We compare our sparse convolution algorithm against two highly optimized
 implementations: FALCON~\cite{falcon} and Tensorflow~\cite{tensorflow}.  FALCON
 is an efficient and fast indirect Winograd convolution implementation that
@@ -309,7 +310,7 @@ the dense implementation.
 \begin{figure}[t]
 	\centering
 	\includegraphics[width=\textwidth]{falcon_tf}
-    \caption{Speed up of our sparse convolution and FALCON relative to
+    \caption{Speedup of our sparse convolution and FALCON relative to
     tensorflow implementation at different levels of sparsity. Note that both
     FALCON and tensorflow are dense convolutions. At higher levels of sparsity
     sparse convolution is much faster than vanilla tensorflow and a significant
@@ -317,15 +318,33 @@ the dense implementation.
 \label{fig:falcon_tf}
 \end{figure}
 
+Exploiting sparsity can introduce workload imbalance in the distribution of work
+across the cores. Figure~\ref{fig:scaling} shows the scaling of our sparse
+convolution with the number of threads. The operation scales well with the
+number of threads indicating that the workload imbalance is largely mitigated
+by the dynamic work distribution strategy.  
 \begin{figure}
 	\centering
 	\includegraphics[width=\textwidth]{scaling}
-    \label{fig:scaling}
+    \caption{Scaling of our sparse convolution (sparsity=0.1) with number of threads. Despite
+    the workload imbalance due to sparsity our approach retains good scaling
+    with the number of threads.}
+\label{fig:scaling}
 \end{figure}
-\label{sec:eval}
 
 \section{Conclusions}
 \label{sec:conclusion}
+
+We demonstrated that direct sparse convolutions can lead to significant
+efficiency gains even when compared to highly optimized dense implementations on
+high-resolution data. We believe that our approach can be further
+improved by optimizations like register tiling which is a very effective
+strategy for improving locality at the register level. Using our
+approach on GPU like architectures where control flow is significantly more
+expensive and work load imbalance is difficult to manage can be challenging.
+However, we do not leverage structure in the sparsity (block sparsity) which
+occurs due to locality in video streams or LIDAR data. Exploiting sparsity
+structure can perhaps enable applying our approach to GPU like accelerators. 
 
 \bibliographystyle{abbrv}
 \nocite{*}
