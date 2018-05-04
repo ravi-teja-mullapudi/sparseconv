@@ -253,6 +253,9 @@ benefits. The data layout of the tensors $W$ and $I$ is changed so that the
 vector loads are from a contiguous memory locations. The memory allocation for
 all the tensors are also aligned to 64 bytes for effective SIMD code generation.
 
+Code for the implementation of our approach is available at the following url:
+https://github.com/ravi-teja-mullapudi/sparseconv
+
 \section{Evaluation}
 \label{sec:eval}
 We compare our sparse convolution algorithm against two highly optimized
@@ -337,14 +340,15 @@ by the dynamic work distribution strategy.
 
 We demonstrated that direct sparse convolutions can lead to significant
 efficiency gains even when compared to highly optimized dense implementations on
-high-resolution data. We believe that our approach can be further
-improved by optimizations like register tiling which is a very effective
-strategy for improving locality at the register level. Using our
-approach on GPU like architectures where control flow is significantly more
-expensive and work load imbalance is difficult to manage can be challenging.
-However, we do not leverage structure in the sparsity (block sparsity) which
-occurs due to locality in video streams or LIDAR data. Exploiting sparsity
-structure can perhaps enable applying our approach to GPU like accelerators. 
+high-resolution data. We believe that our approach can be further improved by
+optimizations like register tiling which is a very effective strategy for
+improving locality at the register level. Our implementation only achieves a
+fraction of peak GFLOPs throughput. Using our approach on GPU like architectures
+where control flow is significantly more expensive and work load imbalance is
+difficult to manage can be challenging.  However, we do not leverage structure
+in the sparsity (block sparse) which is common in video streams or LIDAR data.
+Exploiting sparsity structure can perhaps enable applying our approach to GPU
+like accelerators. 
 
 \bibliographystyle{abbrv}
 \nocite{*}
