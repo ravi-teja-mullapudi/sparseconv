@@ -218,7 +218,7 @@ require the programmer to explicitly use vector intrinsics, or rely on compiler
 auto-vectorization. Our initial experiments and analysis with the GNU GCC compiler
 showed that vector units were not being utilized. OpenMP 4.0 added new directives
 that let the programmer guide the compiler in generating good vector code. These
-enhanced OpenMP 4.0 directives are supported by the Intel's ICC compiler, which
+enhanced OpenMP 4.0 directives are supported by Intel's C Compiler (ICC), which
 we use in our evaluation. Lines 15-16 instruct the compiler to map the iterations 
 of the loop on line 17 in groups of vector width. Note the iterations of the loop 
 on line 17 can be done in parallel and this is difficult for a compiler to infer
@@ -276,9 +276,8 @@ deep learning framework. We used pre-built Tensorflow packages instead of
 compiling from source. We use convolutional layer configurations with large
 spatial resolution from the VGG architecture~\cite{simonyan2014very}.  The
 specific configurations of the convolution operations are listed in
-Table~\ref{tab:conv_config}. As mentioned earlier, we use the latest icc (Intel
-C Compiler) compiler for compiling both our implementation and the FALCON
-library. 
+Table~\ref{tab:conv_config}. As mentioned earlier, We use Intel ICC to 
+compile both our implementation and the FALCON library. 
 
 We performed our evaluation on a machine with a dual-socket 10-core Intel 
 Xeon E5-2630v4 2.20GHz CPU, with 25~MB of L3 cache and 128~GB of DRAM. This 
@@ -287,17 +286,21 @@ operation on eight single-precision floating point numbers simultaneously.
 The CPU can retire one \texttt{add} and one \texttt{mul} operation per cycle,
 thus yielding a theoretical 464 GFLOPS.
 
-Figure~\ref{fig:falcon_tf} shows the relative speed up of our sparse convolution
-and FALCON relative to Tensorflow. Both FALCON and Tensorflow are dense
-convolution implementations and do not leverage spatial sparsity. For the
-purpose of the experiments the sparse mask $M$ is generated randomly with the
-desired level of sparsity. Sparsity in real world data exhibits block structure
-which could lead to further improvement but we do not explore such patterns in
-this project. As the figure shows sparse convolution is much faster compared to
-dense convolution in Tensorflow and also offers significant performance
-improvements over FALCON at higher levels of sparsity. On feature maps with
-higher resolution (2x) sparse convolution shows even better gains relative to
-the dense implementation.
+Our goal is two-fold: demonstrate that exploiting sparseness improves performance
+of fully convolutional networks; and ensure that sparseness does not induce load
+imbalance when scheduling work across threads.
+
+To evaluate our first goal, Figure~\ref{fig:falcon_tf} shows the relative speed 
+up of our sparse convolution and FALCON relative to Tensorflow. Both FALCON and Tensorflow are dense
+convolution implementations that do not leverage spatial sparsity. For the
+purpose of the experiments, our benchmark randomly generates the sparse mask $M$
+with the desired level of sparsity. We note that sparsity in real-world data 
+exhibits a blocked structure, which could lead to further improvements in our
+technique, but we do not explore such patterns in this project. As the figure 
+shows, sparse convolution is much faster compared to dense convolution in 
+Tensorflow, and also offers significant performance improvements over FALCON
+at higher levels of sparsity. On feature maps with higher resolution (2x), 
+sparse convolution shows even better gains relative to the dense implementation.
 
 \begin{table}[t]\centering
 \small
@@ -331,11 +334,14 @@ the dense implementation.
 \label{fig:falcon_tf}
 \end{figure}
 
-Exploiting sparsity can introduce workload imbalance in the distribution of work
-across the cores. Figure~\ref{fig:scaling} shows the scaling of our sparse
-convolution with the number of threads. The operation scales well with the
-number of threads indicating that the workload imbalance is largely mitigated
-by the dynamic work distribution strategy.  
+Exploiting sparsity has the potential to introduce workload imbalance in the 
+distribution of work across CPU cores. Figure~\ref{fig:scaling} shows the scaling 
+of our sparse convolution with the number of available worker threads (cores). 
+As seen in the figure, the operation scales well with the number of threads, 
+indicating that the workload imbalance is largely mitigated by the dynamic work 
+distribution strategy. Even in the presence of blocked sparsity, we rely on tiling
+to create indepdent work. 
+
 \begin{figure}
 	\centering
 	\includegraphics[width=\textwidth]{scaling}
