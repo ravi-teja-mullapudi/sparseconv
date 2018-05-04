@@ -206,22 +206,22 @@ Additionally, in most inference settings there is a single input that needs to
 be processed fast, and our evaluation will focus on the single input per batch
  ($B=1$) setting.
 
-Modern multi-core processors support parallelism at two levels one at the core
-level and the other at the level of functional units (ALUs) which perform basic
-operations like addition and multiplication. Typically there is support for
+Modern multi-core processors support parallelism at two levels: at the core
+level and at the level of functional units (ALUs) which perform basic
+operations like addition and multiplication. Typically, there is support for
 executing a single instructions on multiple data items called SIMD/vector
 processing.  Current architectures have instructions which can perform either 8
-or 16 floating point operations at the same time. One of the key challenges of
+or 16 floating point operations at the same time. One of the key challenges to
 getting good performance on a modern processor is in effectively utilizing the
-vector processing. Utilizing the SIMD units either requires the programmer to
-explicitly use vector intrinsics or rely on compiler auto-vectorization. Our
-initial experiments and analysis with gcc compiler showed that vector units were
-not being utilized. OpenMP 4.0 added new directives which let the programmer
-guide the compiler in generating good vector code. However, the new OpenMP
-directives are only supported by the intel compiler which we use in our
-evaluation. Lines 15-16 instruct the compiler to map the iterations of the loop
-on line 17 in groups of vector width. Note the iterations of the loop on line 17
-can be done in parallel and this is difficult for a compiler to infer
+vector processing units on the target machine. Utilizing the SIMD units either
+require the programmer to explicitly use vector intrinsics, or rely on compiler
+auto-vectorization. Our initial experiments and analysis with the GNU GCC compiler
+showed that vector units were not being utilized. OpenMP 4.0 added new directives
+that let the programmer guide the compiler in generating good vector code. These
+enhanced OpenMP 4.0 directives are supported by the Intel's ICC compiler, which
+we use in our evaluation. Lines 15-16 instruct the compiler to map the iterations 
+of the loop on line 17 in groups of vector width. Note the iterations of the loop 
+on line 17 can be done in parallel and this is difficult for a compiler to infer
 automatically.
 
 \begin{figure}
