@@ -245,19 +245,23 @@ for $b$ in [0, $B$]:
     \label{fig:conv_algo}
 \end{figure}
 
-\textbf{Sparsity}
-
-\textbf{Data Layout and Alignment}
+Line 13 skips the filtering operation at the locations where it need not be
+computed. The tiling and the loop ordering ensures that skipping the filtering
+at the designated spatial locations has minimal overhead. We implemented a
+version which skipped work at the level of tiles but did not see additional
+benefits. The data layout of the tensors $W$ and $I$ is changed so that the
+vector loads are from a contiguous memory locations. The memory allocation for
+all the tensors are also aligned to 64 bytes for effective SIMD code generation.
 
 \section{Evaluation}
-We compare our sparse convolutation technique against two highly optimized
-implementations: FALCON~\cite{falcon} and Tensorflow~\cite{tensorflow}.
-FALCON is an efficient and fast indirect Winograd convolution implementation 
-that utilizes optimized Intel libraries; Tensorflow is a popular and high 
-performance deep learning framwork. We used pre-built Tensorflow packages
-instead of compiling from source. We use convolutional layer configurations 
-with large spatial resolution from the VGG architecture~\cite{simonyan2014very}. 
-The specific configurations of the convolution operations are listed in
+We compare our sparse convolution algorithm against two highly optimized
+implementations: FALCON~\cite{falcon} and Tensorflow~\cite{tensorflow}.  FALCON
+is an efficient and fast indirect Winograd convolution implementation that
+utilizes optimized Intel libraries; Tensorflow is a popular and high performance
+deep learning framework. We used pre-built Tensorflow packages instead of
+compiling from source. We use convolutional layer configurations with large
+spatial resolution from the VGG architecture~\cite{simonyan2014very}.  The
+specific configurations of the convolution operations are listed in
 Table~\ref{tab:conv_config}. As mentioned earlier, we use the latest icc (Intel
 C Compiler) compiler for compiling both our implementation and the FALCON
 library. 
@@ -269,7 +273,19 @@ operation on eight single-precision floating point numbers simultaneously.
 The CPU can retire one \texttt{add} and one \texttt{mul} operation per cycle,
 thus yielding a theoretical 464 GFLOPS.
 
-\begin{table}[h]\centering
+Figure~\ref{fig:falcon_tf} shows the relative speed up of our sparse convolution
+and FALCON relative to tensorflow. Both FALCON and tensorflow are dense
+convolution implementations and do not leverage spatial sparsity. For the
+purpose of the experiments the sparse mask $M$ is generated randomly with the
+desired level of sparsity. Sparsity in real world data exhibits block structure
+which could lead to further improvement but we do not explore such patterns in
+this project. As the figure shows sparse convolution is much faster compared to
+dense convolution in tensorflow and also offers significant performance
+improvements over FALCON at higher levels of sparsity. On feature maps with
+higher resolution (2x) sparse convolution shows even better gains relative to
+the dense implementation.
+
+\begin{table}[t]\centering
 \small
 \begin{tabularx}{0.75\textwidth}{Xcccccc}\toprule
     Layer Name & $C$ & $K$ & $H$ & $W$ & $F_h$ & $F_w$\\ \midrule 
@@ -293,10 +309,15 @@ thus yielding a theoretical 464 GFLOPS.
 \begin{figure}[t]
 	\centering
 	\includegraphics[width=\textwidth]{falcon_tf}
-    \label{fig:falcon_tf}
+    \caption{Speed up of our sparse convolution and FALCON relative to
+    tensorflow implementation at different levels of sparsity. Note that both
+    FALCON and tensorflow are dense convolutions. At higher levels of sparsity
+    sparse convolution is much faster than vanilla tensorflow and a significant
+    improvement over the highly optimized FALCON library.}
+\label{fig:falcon_tf}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}
 	\centering
 	\includegraphics[width=\textwidth]{scaling}
     \label{fig:scaling}
