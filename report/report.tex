@@ -263,8 +263,8 @@ benefits. The data layout of the tensors $W$ and $I$ is changed so that the
 vector loads are from a contiguous memory locations. The memory allocation for
 all the tensors are also aligned to 64 bytes for effective SIMD code generation.
 
-Code for the implementation of our approach is available at the following url:
-https://github.com/ravi-teja-mullapudi/sparseconv
+Code for the implementation of our approach is available at
+\href{https://github.com/ravi-teja-mullapudi/sparseconv}{https://github.com/ravi-teja-mullapudi/sparseconv}
 
 \section{Evaluation}
 \label{sec:eval}
@@ -288,13 +288,13 @@ The CPU can retire one \texttt{add} and one \texttt{mul} operation per cycle,
 thus yielding a theoretical 464 GFLOPS.
 
 Figure~\ref{fig:falcon_tf} shows the relative speed up of our sparse convolution
-and FALCON relative to tensorflow. Both FALCON and tensorflow are dense
+and FALCON relative to Tensorflow. Both FALCON and Tensorflow are dense
 convolution implementations and do not leverage spatial sparsity. For the
 purpose of the experiments the sparse mask $M$ is generated randomly with the
 desired level of sparsity. Sparsity in real world data exhibits block structure
 which could lead to further improvement but we do not explore such patterns in
 this project. As the figure shows sparse convolution is much faster compared to
-dense convolution in tensorflow and also offers significant performance
+dense convolution in Tensorflow and also offers significant performance
 improvements over FALCON at higher levels of sparsity. On feature maps with
 higher resolution (2x) sparse convolution shows even better gains relative to
 the dense implementation.
@@ -324,9 +324,9 @@ the dense implementation.
 	\centering
 	\includegraphics[width=\textwidth]{falcon_tf}
     \caption{Speedup of our sparse convolution and FALCON relative to
-    tensorflow implementation at different levels of sparsity. Note that both
-    FALCON and tensorflow are dense convolutions. At higher levels of sparsity
-    sparse convolution is much faster than vanilla tensorflow and a significant
+    Tensorflow implementation at different levels of sparsity. Note that both
+    FALCON and Tensorflow are dense convolutions. At higher levels of sparsity
+    sparse convolution is much faster than vanilla Tensorflow and a significant
     improvement over the highly optimized FALCON library.}
 \label{fig:falcon_tf}
 \end{figure}
