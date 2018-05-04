@@ -250,16 +250,24 @@ for $b$ in [0, $B$]:
 \textbf{Data Layout and Alignment}
 
 \section{Evaluation}
-We compare our sparse implementation to highly optimized indirect winograd
-implementation (FALCON https://colfaxresearch.com/falcon-library/) which
-utilizes optimized intel libraries and tensorflow (not compiled from source
-which could lead to better performance) which is a high performance deep
-learning framework.  We use convolutional layer configurations with large
-spatial resolution from the VGG architecture~\cite{simonyan2014very}. The
-specific configurations of the convolution operations are listed in
-Table~\ref{tab:conv_config}. As we mention earlier we use the latest icc (Intel
+We compare our sparse convolutation technique against two highly optimized
+implementations: FALCON~\cite{falcon} and Tensorflow~\cite{tensorflow}.
+FALCON is an efficient and fast indirect Winograd convolution implementation 
+that utilizes optimized Intel libraries; Tensorflow is a popular and high 
+performance deep learning framwork. We used pre-built Tensorflow packages
+instead of compiling from source. We use convolutional layer configurations 
+with large spatial resolution from the VGG architecture~\cite{simonyan2014very}. 
+The specific configurations of the convolution operations are listed in
+Table~\ref{tab:conv_config}. As mentioned earlier, we use the latest icc (Intel
 C Compiler) compiler for compiling both our implementation and the FALCON
 library. 
+
+We performed our evaluation on a machine with a dual-socket 10-core Intel 
+Xeon E5-2630v4 2.20GHz CPU, with 25~MB of L3 cache and 128~GB of DRAM. This 
+Broadwell-class CPU is equipped with AVX2 256-bit SIMD registers enabling
+operation on eight single-precision floating point numbers simultaneously. 
+The CPU can retire one \texttt{add} and one \texttt{mul} operation per cycle,
+thus yielding a theoretical 464 GFLOPS.
 
 \begin{table}[h]\centering
 \small
