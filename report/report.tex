@@ -108,7 +108,7 @@ O_{b, h, w, k} = \sum_{c=0}^{C}\sum_{y=0}^{F_h} \sum_{x=0}^{F_w} I_{b, S h+y, S
 \label{eqn:conv}
 \end{equation}
 
-The features and the filter coefficients are represented as 4d tensors of the
+The features and the filter coefficients are represented as 4D tensors of the
 following shapes:
 \begin{align*}
 & I:B \times H \times W \times C \\
@@ -120,24 +120,24 @@ height and width of the input feature map. $S$ is the spatial stride at which
 the filtering is performed on the input (sampling rate). $P$ is the amount of
 padding added to the input to handle boundary conditions. $F_h$ and $F_w$ are
 the spatial height and width of the filters. $C$ and $K$ are the input and
-output feature dimensions respectively. The operation can be parallelized across
-many dimensions and mapping the operation to modern hardware CPUs, GPUs, FPGAs
+output feature dimensions, respectively. The operation can be parallelized across
+many dimensions and mapping the operation to modern hardware CPUs, GPUs, FPGAs,
 and other accelerators has been a topic of extensive
 research~\cite{vasilache2014fast, lavin2016fast, liu2018efficient,
-jia2018optimizing, tsai2016performance, truong2016latte, chetlur2014cudnn, chen2017eyeriss}. The main
-challenge is efficient implementation is effectively utilizing the parallelism
-offered by the architecture and while maintaining data locality.
+jia2018optimizing, tsai2016performance, truong2016latte, chetlur2014cudnn, chen2017eyeriss}. 
+The main challenge in efficient implementation is effectively utilizing the parallelism
+offered by the architecture while maintaining data locality.
 
 \textbf{Spatial Sparsity} In settings where the input data is sparse or highly
-redundant (consecutive frames of video) the convolution operation can only
+redundant, e.g., consecutive frames of video, the convolution operation can only be
 performed in spatial locations where the input signal is present or changes
 significantly. Figure~\ref{fig:frames} shows frames captured from one of the
-onboard cameras in an autonomous driving car moving. Despite being captured a
+onboard cameras in an autonomous driving car moving. Despite being captured at a
 low frame rate there is a significant region of the input that remains unchanged
 at the pixel level. Feature representations in deeper layers of a network are
 more robust to pixel-level changes and would exhibit even higher levels of
 sparsity~\cite{shelhamer2016clockwork}. Recent work~\cite{ren2018sbnet} has show
-the effectiveness of sparse block convolutions on sparse 3d LIDAR data.
+the effectiveness of sparse block convolutions on sparse 3D LIDAR data.
 
 \begin{figure}[h]
 	\centering
@@ -159,17 +159,17 @@ the effectiveness of sparse block convolutions on sparse 3d LIDAR data.
 \label{fig:frames}
 \end{figure}
 
-\textbf{Direct vs. Indirect Convolution} Early implementation of the convolution
+\textbf{Direct vs. Indirect Convolution} Early implementations of the convolution
 operation transformed the operation into a matrix multiply to leverage fast
-vendor optimized linear algebra libraries for the target machine architecture.
+vendor-optimized linear algebra libraries for the target machine architecture.
 Recent work~\cite{vasilache2014fast, lavin2016fast} has demonstrated that
-performing the convolution in the other domains (FFT or winograd) yields
+performing the convolution in the other domains (FFT or Winograd) yields
 significant improvements in performance.  Indirect approaches involve
 transforming the input features and the weights into a different domain,
 followed by efficient operations in the transformed domain and an inverse
 transformation back into the spatial domain. State-of-the-art models use filters
 with small support ($3 \times 3$, $1 \times 1$), in this regime transformation
-to the winograd domain is more effective than the FFT domain. Domain
+to the Winograd domain is more effective than the FFT domain. Domain
 transformation approaches do not work well with sparsity since spatial sparsity
 cannot be effectively exploited during the
 transformations~\cite{liu2018efficient}.  We demonstrate simple parallel and
@@ -178,7 +178,7 @@ convolutions.
 
 \section{Sparse Direct Convolution}
 Our assumption is that the sparse spatial locations to compute the convolution
-operation at is already determined. As we mentioned earlier this could be from
+operation at is already determined. As mentioned earlier, this could be from
 pixel or feature level differences in a video stream or from sparse input
 signal. The locations are encoded by a mask $M$ which is a 3d tensor of shape $B
 \times (\ceil{(H - F_h + 2P)/S}) \times (\ceil{(W - F_w + 2P)/S})$, $M_{b,h,w} =
@@ -201,9 +201,10 @@ in parallel. By constraining the tile sizes in the spatial as well as the filter
 output filter dimension the data locality is improved since there is data reuse
 when the working set fits in the CPU caches.  This is similar to the blocked
 matrix-multiply algorithm which improves data reuse.  Parallelizing across
-the batch dimension is straightforward and not the main focus. Additionally, in
-most inference settings there is a single input that needs to be processed fast
-and our evaluation will focus on the single input per batch ($B=1$) setting.
+the batch dimension is straightforward and not the main focus of this project. 
+Additionally, in most inference settings there is a single input that needs to 
+be processed fast, and our evaluation will focus on the single input per batch
+ ($B=1$) setting.
 
 Modern multi-core processors support parallelism at two levels one at the core
 level and the other at the level of functional units (ALUs) which perform basic
